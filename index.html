@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paid-ad staying power: how long ads stay live, from PeekPanda's stored ad-library data</title>
+<meta name="description" content="Paste a PeekPanda paid-ad intelligence response and get survival curves by format, lasting factors (button text, copy length), an advertiser ranking, weekly launch cadence and a CSV. Runs in your browser.">
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; max-width: 1100px; margin: 2rem auto; padding: 0 1rem; color: #1b1b1f; }
+  textarea { width: 100%; min-height: 150px; font: 13px ui-monospace, monospace; }
+  button, select, input { padding: .45rem .9rem; margin: .5rem .5rem .5rem 0; }
+  button { cursor: pointer; }
+  table { border-collapse: collapse; width: 100%; margin-top: .5rem; font-size: 14px; }
+  th, td { border-bottom: 1px solid #ddd; padding: .35rem .5rem; text-align: left; vertical-align: top; }
+  td.n, th.n { text-align: right; white-space: nowrap; } .muted { color: #777; } .err { color: #cf222e; white-space: pre-wrap; } .new { color: #1a7f37; font-weight: 600; }
+  .box { background: #f6f8fa; padding: .5rem 1rem; border-radius: 6px; margin: .5rem 0; }
+  .kpi { display: flex; flex-wrap: wrap; gap: .75rem; margin: .75rem 0; }
+  .kpi div { background: #f6f8fa; border-radius: 6px; padding: .4rem .8rem; min-width: 120px; } .kpi b { display: block; font-size: 20px; }
+  .bar { display: inline-block; height: 10px; background: #4f7cff; border-radius: 2px; vertical-align: middle; }
+  .bar.thin { background: #b9c6ee; }
+  .legend span { display: inline-block; margin-right: 1rem; font-size: 13px; } .legend i { display: inline-block; width: 12px; height: 3px; margin-right: 4px; vertical-align: middle; }
+  pre { background: #f6f8fa; padding: .75rem; overflow-x: auto; font-size: 13px; }
+  svg { max-width: 100%; height: auto; }
+  footer { margin-top: 2.5rem; font-size: 13px; color: #555; }
+  a { color: #0969da; }
+</style>
+</head>
+<body>
+<h1>Paid-ad staying power</h1>
+<p>Paste a PeekPanda paid-ad intelligence response (the stored-library ranking, or one app's chart) and this page shows how long ads stay live: survival curves by format, which button text and copy length last longer, advertisers with the most long-running ads, and weekly launch cadence. Nothing leaves your browser.</p>
+<textarea id="in" spellcheck="false" placeholder='{"generatedAt":"...","totals":{...},"advertisers":[...],"survival":[...]}'></textarea>
+<p class="muted">Optional: paste a report you saved earlier (CLI <code>--format json</code> or a <code>--state</code> file) to see what changed since then.</p>
+<textarea id="prev" spellcheck="false" style="min-height:60px"></textarea>
+<div>
+  <label>Sort advertisers
+    <select id="sort">
+      <option value="long">live beyond 30 days</option>
+      <option value="share">share beyond 30 days</option>
+      <option value="live">live ads</option>
+      <option value="new">new in 7 days</option>
+    </select>
+  </label>
+  <label>Thin slice under <input id="min" type="number" min="0" value="30" style="width:5rem"> ads</label>
+  <button id="go">Show</button>
+  <button id="ex">Load example data</button>
+  <button id="csv" disabled>Download CSV</button>
+</div>
+<div id="err" class="err"></div>
+<div id="out"></div>
+
+<h2>Where to get the JSON</h2>
+<p>The input comes from <a href="https://peekpanda.com">PeekPanda</a>, an iOS competitor catalogue that keeps dated Meta and TikTok ad-library observations. Call:</p>
+<pre>curl --get 'https://api.peekpanda.com/v1/paid-ads/intelligence' \
+  --header "Authorization: Bearer $PEEKPANDA_TOKEN" \
+  --header 'x-genviral-tenancy: personal'
+
+# one app (numeric App Store id)
+curl --get 'https://api.peekpanda.com/v1/competitors/ios/6480417616/paid-ads/intelligence' \
+  --header "Authorization: Bearer $PEEKPANDA_TOKEN" \
+  --header 'x-genviral-tenancy: personal'</pre>
+<p>Over MCP these are the <code>get_ads</code> actions <code>intelligence</code> and <code>app_intelligence</code>. You need a PeekPanda account and an API key; the <a href="https://peekpanda.com/docs/paid-ad-intelligence">paid-ad rankings reference</a> lists every field. The command-line version on <a href="https://github.com/fdarkaou/paid-ad-staying-power">GitHub</a> makes the call for you, keeps a weekly diff and can post to Slack or Discord.</p>
+<p class="muted">These figures describe the ads PeekPanda collected. They are not spend, reach or performance, and a longer run does not prove an ad works. A reading that rests on few ads is marked thin.</p>
+<footer>MIT licensed sample. Example data is made up and is not real advertisers or apps.</footer>
+
+<script type="module">
+import { toReport, diff, diffIsEmpty, toCsv, spark } from './staying.js';
+const $ = (id) => document.getElementById(id);
+let rep = null;
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('en-US'));
+const pct = (x) => (x == null ? '—' : `${Math.round(x * 100)}%`);
+const days = (n) => (n == null ? '—' : `${n}d`);
+const COLORS = ['#1b1b1f', '#4f7cff', '#e8590c', '#2f9e44', '#ae3ec9', '#f08c00'];
+
+function survivalSvg(survival) {
+  const W = 640, H = 260, L = 40, B = 28, T = 10, R = 10;
+  const x = (d) => L + (d / 90) * (W - L - R);
+  const y = (v) => T + (1 - v) * (H - T - B);
+  let g = '';
+  for (const v of [0, 0.25, 0.5, 0.75, 1]) g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="#e5e5e5"/><text x="${L - 6}" y="${y(v) + 4}" font-size="11" text-anchor="end" fill="#777">${Math.round(v * 100)}%</text>`;
+  for (const d of [0, 30, 60, 90]) g += `<text x="${x(d)}" y="${H - 8}" font-size="11" text-anchor="middle" fill="#777">day ${d}</text>`;
+  g += `<line x1="${x(30)}" x2="${x(30)}" y1="${T}" y2="${H - B}" stroke="#bbb" stroke-dasharray="4 3"/>`;
+  survival.forEach((s, i) => {
+    const pts = s.curve.map((v, d) => (typeof v === 'number' ? `${x(d).toFixed(1)},${y(v).toFixed(1)}` : null)).filter(Boolean).join(' ');
+    if (pts) g += `<polyline fill="none" stroke="${COLORS[i % COLORS.length]}" stroke-width="${s.format === 'all' ? 3 : 2}" points="${pts}"/>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Share of ads still running by days since launch">${g}</svg>`;
+}
+
+function diffHtml(d) {
+  if (!d) return '';
+  const L = [];
+  if (d.totals?.length) L.push(`Totals: ${d.totals.map((x) => `${esc(x.label)} ${x.key === 'stillRunningAt30Days' ? `${pct(x.from)} → ${pct(x.to)}` : `${fmt(x.from)} → ${fmt(x.to)}`}`).join('; ')}`);
+  if (d.newAdvertisers?.length) L.push(`<span class="new">New advertisers:</span> ${d.newAdvertisers.map(esc).join(', ')}`);
+  if (d.goneAdvertisers?.length) L.push(`No longer in the list: ${d.goneAdvertisers.map(esc).join(', ')}`);
+  for (const m of (d.advertiserMoves || []).slice(0, 6)) L.push(`${esc(m.name)}: ${esc(m.parts.join(', '))}`);
+  if (d.survivalMoves?.length) L.push(`Day-30 survival: ${d.survivalMoves.map((m) => `${esc(m.format)} ${pct(m.from)} → ${pct(m.to)}`).join('; ')}`);
+  if (d.factorMoves?.length) L.push(`Lasting factors: ${d.factorMoves.slice(0, 6).map((m) => `${esc(m.label)} ${pct(m.from)} → ${pct(m.to)}`).join('; ')}`);
+  if (d.newLandingPages?.length) L.push(`<span class="new">New landing pages:</span> ${d.newLandingPages.map(esc).join(', ')}`);
+  if (d.goneLandingPages?.length) L.push(`Landing pages no longer listed: ${d.goneLandingPages.map(esc).join(', ')}`);
+  return `<div class="box"><strong>Since the saved report</strong>${diffIsEmpty(d) ? '<p>Nothing changed.</p>' : L.map((x) => `<p>${x}</p>`).join('')}</div>`;
+}
+
+function sortAdv(list) {
+  const k = $('sort').value;
+  const key = { long: (a) => a.liveBeyond30Days, share: (a) => a.liveBeyond30Share, live: (a) => a.liveAds, new: (a) => a.newLast7Days }[k];
+  return [...list].sort((a, b) => (key(b) ?? -1) - (key(a) ?? -1));
+}
+
+const counts = (title, rows) => rows.length ? `<p><span class="muted">${title}:</span> ${rows.map((r) => `${esc(r.label)} ${fmt(r.count)}`).join(' · ')}</p>` : '';
+
+function renderMarket(d) {
+  const t = rep.totals;
+  let h = diffHtml(d);
+  h += `<div class="kpi"><div><b>${fmt(t.ads)}</b>ads collected</div><div><b>${fmt(t.liveAds)}</b>live now</div><div><b>${pct(t.stillRunningAt30Days)}</b>still running at day 30</div><div><b>${t.halfLifeDays ?? '—'}</b>half-life (days)</div><div><b>${days(t.medianRunDays)}</b>median run</div><div><b>${fmt(t.liveBeyond60Days)}</b>live beyond 60 days</div></div>`;
+  h += `<h2>Still running after N days</h2>${survivalSvg(rep.survival)}<div class="legend">${rep.survival.map((s, i) => `<span><i style="background:${COLORS[i % COLORS.length]}"></i>${esc(s.format)} (${fmt(s.ads)} ads)</span>`).join('')}</div>`;
+  h += `<table><thead><tr><th>Format</th><th class="n">Ads</th><th class="n">Day 7</th><th class="n">Day 14</th><th class="n">Day 30</th><th class="n">Day 60</th><th class="n">Day 90</th><th class="n">Half-life (curve)</th></tr></thead><tbody>${rep.survival.map((s) => `<tr><td>${esc(s.format)}</td><td class="n">${fmt(s.ads)}</td><td class="n">${pct(s.day7)}</td><td class="n">${pct(s.day14)}</td><td class="n">${pct(s.day30)}</td><td class="n">${pct(s.day60)}</td><td class="n">${pct(s.day90)}</td><td class="n">${days(s.halfLifeFromCurve)}</td></tr>`).join('')}</tbody></table>`;
+  const names = { cta: 'Button text (CTA)', copy_length: 'Body-copy length (characters)' };
+  for (const f of rep.factors) {
+    h += `<h2>${esc(names[f.factor] || f.factor)}: still running at day 30</h2><table><tbody>${f.slices.map((s) => `<tr><td style="width:30%">${esc(s.label)}</td><td class="n" style="width:10%">${fmt(s.ads)} ads</td><td><span class="bar${s.thin ? ' thin' : ''}" style="width:${Math.round((s.stillRunningAt30Days || 0) * 300)}px"></span> ${pct(s.stillRunningAt30Days)}${s.thin && s.ads > 0 ? ' <span class="muted">thin</span>' : ''}</td></tr>`).join('')}</tbody></table>`;
+  }
+  if (rep.categories.length) h += `<h2>Categories</h2><table><thead><tr><th>Category</th><th class="n">Advertisers</th><th class="n">Live ads</th><th class="n">New 7d</th><th class="n">Median run</th><th class="n">Day 30</th><th class="n">Half-life</th></tr></thead><tbody>${rep.categories.map((c) => `<tr><td>${esc(c.category)}</td><td class="n">${fmt(c.advertisers)}</td><td class="n">${fmt(c.liveAds)}</td><td class="n">${fmt(c.newLast7Days)}</td><td class="n">${days(c.medianRunDays)}</td><td class="n">${pct(c.stillRunningAt30Days)}</td><td class="n">${days(c.halfLifeDays)}</td></tr>`).join('')}</tbody></table>`;
+  h += `<h2>Advertisers</h2><table><thead><tr><th>Advertiser</th><th>Category</th><th class="n">Live</th><th class="n">Total</th><th class="n">Live &gt;30d</th><th class="n">Share &gt;30d</th><th class="n">New 7d</th><th>Weekly new ads</th><th class="n">Median</th><th class="n">Longest</th><th>Top CTA</th></tr></thead><tbody>${sortAdv(rep.advertisers).map((a) => `<tr><td>${esc(a.name || a.advertiserExternalId)}</td><td>${esc(a.category || '—')}</td><td class="n">${fmt(a.liveAds)}</td><td class="n">${fmt(a.totalAds)}</td><td class="n">${fmt(a.liveBeyond30Days)}</td><td class="n">${pct(a.liveBeyond30Share)}</td><td class="n">${fmt(a.newLast7Days)}</td><td><code>${spark(a.weeklyNewAds)}</code></td><td class="n">${days(a.medianRunDays)}</td><td class="n">${days(a.longestRunDays)}</td><td>${esc(a.topCta || '—')}</td></tr>`).join('')}</tbody></table>`;
+  if (rep.cadence.length) {
+    const max = Math.max(1, ...rep.cadence.flatMap((w) => [w.newAds, w.stoppedAds]));
+    h += `<h2>Cadence (UTC Monday weeks)</h2><table><thead><tr><th>Week</th><th>New ads</th><th>Stopped</th></tr></thead><tbody>${rep.cadence.map((w) => `<tr><td>${esc(w.weekStart)}${w.isPartial ? ' <span class="muted">partial</span>' : ''}</td><td><span class="bar" style="width:${Math.round(w.newAds / max * 220)}px"></span> ${fmt(w.newAds)}</td><td><span class="bar thin" style="width:${Math.round(w.stoppedAds / max * 220)}px"></span> ${fmt(w.stoppedAds)}</td></tr>`).join('')}</tbody></table>`;
+  }
+  h += counts('Longevity bands', rep.longevity) + counts('Formats', rep.formats) + counts('CTAs', rep.ctas) + counts('Destinations', rep.destinations);
+  return h;
+}
+
+function renderApp(d) {
+  const t = rep.totals;
+  let h = diffHtml(d);
+  h += `<div class="kpi"><div><b>${fmt(t.ads)}</b>ads collected</div><div><b>${fmt(t.liveAds)}</b>live now</div><div><b>${fmt(t.newAdsLast7Days)}</b>new in 7 days</div><div><b>${fmt(t.newAdsLast30Days)}</b>new in 30 days</div><div><b>${days(t.medianRunDays)}</b>median run (live)</div><div><b>${days(t.longestRunDays)}</b>longest run (live)</div></div>`;
+  if (rep.pace.newLast4Weeks != null) h += `<p>Launch pace, last 4 weeks vs the 4 before: <strong>${rep.pace.newPrev4Weeks} → ${rep.pace.newLast4Weeks}</strong> new ads. Weeks with a launch: ${rep.pace.weeksWithLaunches} of ${rep.pace.weeks}.</p>`;
+  const max = Math.max(1, ...rep.weeks.map((w) => w.newAds));
+  h += `<h2>Weeks (UTC Mondays)</h2><table><thead><tr><th>Week</th><th>New ads</th><th class="n">Of them still live</th></tr></thead><tbody>${rep.weeks.map((w) => `<tr><td>${esc(w.weekStart)}</td><td><span class="bar" style="width:${Math.round(w.newAds / max * 220)}px"></span> ${fmt(w.newAds)}</td><td class="n">${fmt(w.liveAds)}</td></tr>`).join('')}</tbody></table>`;
+  h += counts('Longevity bands', rep.longevity) + counts('Formats', rep.formats) + counts('CTAs', rep.ctas) + counts('Destinations', rep.destinations);
+  if (rep.landingPages.length) h += `<h2>Landing pages</h2><table><thead><tr><th>Page</th><th>Kind</th><th class="n">Ads</th><th class="n">Active</th><th>First seen</th><th>Last seen</th></tr></thead><tbody>${rep.landingPages.map((p) => `<tr><td>${esc(p.page)}</td><td>${esc(p.kind)}</td><td class="n">${fmt(p.adCount)}</td><td class="n">${fmt(p.activeCount)}</td><td>${esc((p.firstSeenAt || '').slice(0, 10) || '—')}</td><td>${esc((p.lastSeenAt || '').slice(0, 10) || '—')}</td></tr>`).join('')}</tbody></table>`;
+  return h;
+}
+
+function render() {
+  $('err').textContent = ''; $('out').innerHTML = '';
+  let raw, prev = null;
+  try { raw = JSON.parse($('in').value); } catch (e) { $('err').textContent = 'That is not valid JSON: ' + e.message; return; }
+  if ($('prev').value.trim()) { try { prev = JSON.parse($('prev').value); } catch (e) { $('err').textContent = 'The saved report is not valid JSON: ' + e.message; return; } }
+  try { rep = toReport(raw, { minAds: Number($('min').value) || 0 }); } catch (e) { $('err').textContent = e.message; return; }
+  let d = null;
+  try { d = prev ? diff(rep, toReport(prev)) : null; } catch (e) { $('err').textContent = 'The saved report: ' + e.message; return; }
+  $('out').innerHTML = rep.kind === 'app' ? renderApp(d) : renderMarket(d);
+  $('csv').disabled = false;
+}
+
+$('go').onclick = render;
+$('sort').onchange = () => { if (rep) render(); };
+$('ex').onclick = async () => {
+  $('in').value = await (await fetch('examples/market.json')).text();
+  $('prev').value = await (await fetch('examples/previous.json')).text();
+  render();
+};
+$('csv').onclick = () => {
+  const url = URL.createObjectURL(new Blob([toCsv(rep)], { type: 'text/csv' }));
+  Object.assign(document.createElement('a'), { href: url, download: `paid-ad-staying-power-${new Date().toISOString().slice(0, 10)}.csv` }).click();
+  URL.revokeObjectURL(url);
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+# Example: every Monday, re-read paid-ad staying power and post what changed to Slack or Discord.
+# Disabled until you set the repository variable ENABLE_STAYING_POWER=true.
+# Secrets: PEEKPANDA_TOKEN (PeekPanda API key), STAYING_WEBHOOK_URL (Slack or Discord incoming webhook).
+# Each run is one API call (Peek allows 30 a day, Panda 1,000).
+name: staying-power
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+jobs:
+  report:
+    if: vars.ENABLE_STAYING_POWER == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/cache/restore@v4
+        with:
+          path: staying-state.json
+          key: staying-state-${{ github.run_id }}
+          restore-keys: staying-state-
+      - name: Paid-ad staying power
+        env:
+          PEEKPANDA_TOKEN: ${{ secrets.PEEKPANDA_TOKEN }}
+          STAYING_WEBHOOK_URL: ${{ secrets.STAYING_WEBHOOK_URL }}
+        run: |
+          # Edit the filters, or swap in --app <storeId> to follow one competitor instead.
+          node cli.js --platform meta --advertisers 50 --state staying-state.json --archive history --webhook "$STAYING_WEBHOOK_URL" >> "$GITHUB_STEP_SUMMARY"
+          node cli.js --file staying-state.json --format csv > staying-power.csv
+      - uses: actions/cache/save@v4
+        with:
+          path: staying-state.json
+          key: staying-state-${{ github.run_id }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: staying-power
+          path: |
+            staying-power.csv
+            history/

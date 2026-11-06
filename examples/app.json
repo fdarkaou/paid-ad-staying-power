@@ -1,0 +1,216 @@
+{
+  "generatedAt": "2026-11-02T09:00:00.000Z",
+  "storeId": "6480417616",
+  "advertiserExternalId": null,
+  "advertisers": [],
+  "totals": {
+    "ads": 36,
+    "liveAds": 8,
+    "advertisers": 2,
+    "newAdsLast7Days": 2,
+    "newAdsLast30Days": 11,
+    "medianRunDays": 12,
+    "longestRunDays": 141
+  },
+  "weeks": [
+    {
+      "weekStart": "2026-05-11",
+      "newAds": 1,
+      "liveAds": 0
+    },
+    {
+      "weekStart": "2026-05-18",
+      "newAds": 0,
+      "liveAds": 0
+    },
+    {
+      "weekStart": "2026-05-25",
+      "newAds": 2,
+      "liveAds": 0
+    },
+    {
+      "weekStart": "2026-06-01",
+      "newAds": 1,
+      "liveAds": 0
+    },
+    {
+      "weekStart": "2026-06-08",
+      "newAds": 0,
+      "liveAds": 0
+    },
+    {
+      "weekStart": "2026-06-15",
+      "newAds": 1,
+      "liveAds": 0
+    },
+    {
+      "weekStart": "2026-06-22",
+      "newAds": 3,
+      "liveAds": 1
+    },
+    {
+      "weekStart": "2026-06-29",
+      "newAds": 1,
+      "liveAds": 0
+    },
+    {
+      "weekStart": "2026-07-06",
+      "newAds": 2,
+      "liveAds": 0
+    },
+    {
+      "weekStart": "2026-07-13",
+      "newAds": 0,
+      "liveAds": 0
+    },
+    {
+      "weekStart": "2026-07-20",
+      "newAds": 1,
+      "liveAds": 0
+    },
+    {
+      "weekStart": "2026-07-27",
+      "newAds": 1,
+      "liveAds": 0
+    },
+    {
+      "weekStart": "2026-08-03",
+      "newAds": 2,
+      "liveAds": 0
+    },
+    {
+      "weekStart": "2026-08-10",
+      "newAds": 4,
+      "liveAds": 1
+    },
+    {
+      "weekStart": "2026-08-17",
+      "newAds": 1,
+      "liveAds": 0
+    },
+    {
+      "weekStart": "2026-08-24",
+      "newAds": 0,
+      "liveAds": 0
+    },
+    {
+      "weekStart": "2026-08-31",
+      "newAds": 2,
+      "liveAds": 0
+    },
+    {
+      "weekStart": "2026-09-07",
+      "newAds": 1,
+      "liveAds": 0
+    },
+    {
+      "weekStart": "2026-09-14",
+      "newAds": 3,
+      "liveAds": 1
+    },
+    {
+      "weekStart": "2026-09-21",
+      "newAds": 2,
+      "liveAds": 1
+    },
+    {
+      "weekStart": "2026-09-28",
+      "newAds": 5,
+      "liveAds": 2
+    },
+    {
+      "weekStart": "2026-10-05",
+      "newAds": 3,
+      "liveAds": 1
+    },
+    {
+      "weekStart": "2026-10-12",
+      "newAds": 2,
+      "liveAds": 1
+    },
+    {
+      "weekStart": "2026-10-19",
+      "newAds": 4,
+      "liveAds": 3
+    },
+    {
+      "weekStart": "2026-10-26",
+      "newAds": 3,
+      "liveAds": 3
+    },
+    {
+      "weekStart": "2026-11-02",
+      "newAds": 2,
+      "liveAds": 2
+    }
+  ],
+  "longevity": [
+    {
+      "band": "0-6",
+      "count": 6
+    },
+    {
+      "band": "7-14",
+      "count": 9
+    },
+    {
+      "band": "15-30",
+      "count": 8
+    },
+    {
+      "band": "31-60",
+      "count": 7
+    },
+    {
+      "band": "61-90",
+      "count": 3
+    },
+    {
+      "band": "90+",
+      "count": 3
+    }
+  ],
+  "longestRunning": [],
+  "formats": [
+    {
+      "key": "video",
+      "label": "Video",
+      "count": 30
+    },
+    {
+      "key": "image",
+      "label": "Image",
+      "count": 6
+    }
+  ],
+  "ctas": [
+    {
+      "key": "install now",
+      "label": "Install now",
+      "count": 24
+    },
+    {
+      "key": "learn more",
+      "label": "Learn more",
+      "count": 12
+    }
+  ],
+  "destinations": [
+    {
+      "key": "app_store",
+      "label": "App Store",
+      "count": 36
+    }
+  ],
+  "landingPages": [
+    {
+      "page": "apps.apple.com/app/id6480417616",
+      "url": "https://apps.apple.com/app/id6480417616",
+      "kind": "app_store",
+      "adCount": 36,
+      "activeCount": 8,
+      "firstSeenAt": "2026-05-04T00:00:00.000Z",
+      "lastSeenAt": "2026-11-01T00:00:00.000Z"
+    }
+  ]
+}
